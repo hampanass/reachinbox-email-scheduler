@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmailStatus {
+  SCHEDULED
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum SendLogStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+}
+
+enum SlackRateLimitNotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String?
+  passwordHash String?
+  googleId     String?    @unique
+  campaigns    Campaign[]
+  slackInstallations SlackInstallation[]
+  slackNotifications SlackRateLimitNotification[]
+  createdAt    DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @db.Timestamptz(3)
+
+  @@index([createdAt])
+}
+
+model Campaign {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject            String
+  body               String   @db.Text
+  startAt            DateTime @db.Timestamptz(3)
+  minimumDelayMs     Int
+  hourlyLimit        Int
+  emails             Email[]
+  slackNotifications SlackRateLimitNotification[]
+  createdAt          DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([userId, createdAt])
+  @@index([startAt])
+}
+
+model Email {
+  id             String      @id @default(cuid())
+  campaignId     String
+  campaign       Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  recipientEmail String
+  status         EmailStatus @default(SCHEDULED)
+  scheduledAt    DateTime    @db.Timestamptz(3)
+  sentAt         DateTime?   @db.Timestamptz(3)
+  error          String?     @db.Text
+  sendLogs       SendLog[]
+  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime    @updatedAt @db.Timestamptz(3)
+
+  // A recipient can appear only once in a campaign; this is the delivery idempotency key.
+  @@unique([campaignId, recipientEmail])
+  @@index([status, scheduledAt])
+  @@index([campaignId])
+}
+
+model SendLog {
+  id             String        @id @default(cuid())
+  emailId        String
+  email          Email         @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  idempotencyKey String        @unique
+  status         SendLogStatus
+  attempt        Int           @default(1)
+  error          String?       @db.Text
+  attemptedAt    DateTime      @default(now()) @db.Timestamptz(3)
+  createdAt      DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @db.Timestamptz(3)
+
+  @@index([emailId, attemptedAt])
+  @@index([status, attemptedAt])
+  // PostgreSQL partial unique index in the migration allows at most one successful log per email.
+}
+
+model SlackInstallation {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId              String
+  teamName            String
+  botUserId           String
+  botAccessToken      String   @db.Text
+  channelId           String
+  channelName         String
+  installerSlackUserId String?
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([userId, teamId])
+  @@index([userId])
+}
+
+model SlackRateLimitNotification {
+  id              String                           @id @default(cuid())
+  eventKey        String                           @unique
+  campaignId      String
+  campaign        Campaign                         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nextEligibleAt  DateTime                         @db.Timestamptz(3)
+  status          SlackRateLimitNotificationStatus @default(PENDING)
+  error           String?                          @db.Text
+  createdAt       DateTime                         @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                         @updatedAt @db.Timestamptz(3)
+
+  @@index([campaignId, createdAt])
+  @@index([userId, createdAt])
+}
