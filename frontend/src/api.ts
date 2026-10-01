@@ -1,4 +1,4 @@
-export const API_BASE = import.meta.env.VITE_API_BASE;
+export const API_BASE = import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "http://localhost:5001" : "");
 
 export type SessionUser = {
   id: string;
@@ -70,7 +70,7 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
       },
     });
   } catch {
-    throw new Error("Could not connect to ReachInbox. Check that the backend is running on port 5001.");
+    throw new Error("Could not connect to ReachInbox. Check your network connection and API configuration.");
   }
 
   if (!response.ok) {
