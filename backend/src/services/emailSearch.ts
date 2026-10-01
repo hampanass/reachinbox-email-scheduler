@@ -48,8 +48,15 @@ export type EmailSearchClient = {
   }>;
 };
 
+const elasticsearchUsername = process.env.ELASTICSEARCH_USERNAME;
+const elasticsearchPassword = process.env.ELASTICSEARCH_PASSWORD;
+const elasticsearchAuth = elasticsearchUsername && elasticsearchPassword
+  ? { username: elasticsearchUsername, password: elasticsearchPassword }
+  : undefined;
+
 const elasticsearchClient = new Client({
   node: process.env.ELASTICSEARCH_URL ?? "http://localhost:9200",
+  ...(elasticsearchAuth ? { auth: elasticsearchAuth } : {}),
   requestTimeout: 3_000,
   maxRetries: 1,
 });

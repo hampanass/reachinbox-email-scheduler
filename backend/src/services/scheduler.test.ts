@@ -208,7 +208,9 @@ test("emails become eligible again after the prior hourly window expires", async
 
   const [member] = await testRedis.zrange(key, "0", "0");
   assert.ok(member);
-  await testRedis.zadd(key, Date.now() - 3_600_001, member);
+  const [seconds, microseconds] = await testRedis.time();
+  const redisNow = Number(seconds) * 1_000 + Math.floor(Number(microseconds) / 1_000);
+  await testRedis.zadd(key, redisNow - 3_600_001, member);
 
   const nextWindow = await reserveCampaignRateSlot(testRedis, campaignId, 1, 0, "hour-two", 1);
   assert.equal(nextWindow.allowed, true);
